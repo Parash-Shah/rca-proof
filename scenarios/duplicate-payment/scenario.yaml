@@ -1,0 +1,35 @@
+# Human-readable scenario contract; the executable implementation is PaymentCounterfactualIT.
+# This YAML is not yet parsed by a generic scenario runner.
+name: duplicate-payment
+failure:
+  name: DUPLICATE_PAYMENT
+  invariants:
+    orders_created: 1
+    successful_payment_effects:
+      min: 1
+      max: 1
+factors:
+  - WORKER_CRASH
+  - MESSAGE_REDELIVERY
+  - MISSING_IDEMPOTENCY
+baseline_repetitions: 10
+negative_control: []
+expected_minimal_causal_sets:
+  - [MESSAGE_REDELIVERY, MISSING_IDEMPOTENCY]
+causal_roles:
+  trigger: WORKER_CRASH
+  mechanism: MESSAGE_REDELIVERY
+  latent_fault: MISSING_IDEMPOTENCY
+scope:
+  max_factors: 3
+  max_deliveries: 2
+  invariant: duplicate-payment-safety
+  crash_implementation: exception-after-charge-in-tests
+  process_kill_demo: docker-compose
+remediation_under_test:
+  name: STABLE_PROVIDER_IDEMPOTENCY_KEY
+  prerequisites:
+    - provider-atomically-deduplicates-keys
+    - provider-retains-keys-through-retry-horizon
+    - order-identity-stable-across-deliveries
+  certified: false

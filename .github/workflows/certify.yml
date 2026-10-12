@@ -1,0 +1,118 @@
+name: Certify a review candidate
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_commit:
+        description: Exact candidate commit SHA (already pushed)
+        required: true
+      base_commit:
+        description: Exact target branch commit SHA
+        required: true
+      contract:
+        description: Versioned remediation contract to certify
+        type: choice
+        options: [payment, http-retry]
+        default: payment
+        required: true
+permissions:
+  contents: read
+jobs:
+  test:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Validate immutable inputs
+        env:
+          CANDIDATE: ${{ inputs.candidate_commit }}
+          BASE: ${{ inputs.base_commit }}
+        run: |
+          [[ "$CANDIDATE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$BASE" =~ ^[0-9a-f]{40}$ ]]
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21.0.9'
+      - name: Bind and test candidate without signing secrets
+        env:
+          BASE: ${{ inputs.base_commit }}
+        run: |
+          python3 scripts/prepare-certification.py --base "$BASE"
+          python3 -B scripts/test_certification_tools.py
+          mvn -B -ntp clean verify
+      - name: Capture the actual test environment
+        env:
+          CANDIDATE: ${{ inputs.candidate_commit }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, platform, subprocess
+          from pathlib import Path
+          environment = {"runnerOS": platform.platform(), "python": platform.python_version()}
+          for image in ("localstack/localstack:4.7.0", "postgres:16-alpine", "wiremock/wiremock:3.13.1"):
+              environment[image] = subprocess.check_output(["docker", "image", "inspect", image, "--format", "{{.Id}}"], text=True).strip()
+          source = Path("build-evidence/source.json")
+          reports = {}
+          for path in sorted(list(Path(".").glob("**/target/surefire-reports/TEST-*.xml")) + list(Path(".").glob("**/target/failsafe-reports/TEST-*.xml"))):
+              if path.stat().st_mtime < source.stat().st_mtime:
+                  raise SystemExit("Stale report in candidate build")
+              reports[path.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+          subjects = {}
+          for name in ("certification-subject.json", "certification-subject-http-retry.json"):
+              path = Path("rcaproof-api/target") / name
+              if path.stat().st_mtime < source.stat().st_mtime:
+                  raise SystemExit("Stale runtime subject in candidate build")
+              subjects[path.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+          Path("rcaproof-api/target/ci-environment.json").write_text(json.dumps({"runId": os.environ["GITHUB_RUN_ID"], "commit": os.environ["CANDIDATE"], "environment": environment, "reports": reports, "subjects": subjects, "sourceManifestSha256": hashlib.sha256(source.read_bytes()).hexdigest()}))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-evidence
+          path: |
+            **/target/surefire-reports/TEST-*.xml
+            **/target/failsafe-reports/TEST-*.xml
+            rcaproof-api/target/certification-subject*.json
+            rcaproof-api/target/ci-environment.json
+            rcaproof-api/target/rcaproof-api-*-exec.jar
+            build-evidence/source.json
+            build-evidence/candidate.patch
+  sign:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # This environment must require reviewers and allow deployments from main only.
+    # Store the signing secret in this environment, never as a repository-wide secret.
+    environment: certification
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Preserve the trusted main-branch signer
+        run: cp scripts/attest-certification.py "$RUNNER_TEMP/attest-certification.py"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.candidate_commit }}
+          fetch-depth: 0
+          path: candidate
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: candidate-evidence
+          path: candidate
+      - name: Sign approved measured subject using trusted code
+        env:
+          RCAPROOF_CI_SIGNING_KEY: ${{ secrets.RCAPROOF_CI_SIGNING_KEY }}
+          RCAPROOF_ATTEST_COMMIT: ${{ inputs.candidate_commit }}
+          RCAPROOF_ATTEST_BASE: ${{ inputs.base_commit }}
+          RCAPROOF_CERTIFICATION_CONTRACT: ${{ inputs.contract }}
+        run: python3 -I "$RUNNER_TEMP/attest-certification.py" --workspace "$GITHUB_WORKSPACE/candidate"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-candidate
+          path: |
+            candidate/artifacts/ci-attestation.json
+            candidate/rcaproof-api/target/rcaproof-api-*-exec.jar

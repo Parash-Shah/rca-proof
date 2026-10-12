@@ -1,0 +1,25 @@
+version: http-retry-storm-v1
+signature: RETRY_STORM
+scope: LOCAL_HTTP_LAB
+dependency: wiremock/wiremock:3.13.1
+trigger: one correlated HTTP GET
+factors:
+  - DEPENDENCY_HTTP_500
+  - EXCESSIVE_RETRIES
+  - ALTERNATE_DEPLOYMENT
+failure:
+  provider_requests_per_operation:
+    max: 3
+baseline:
+  max_attempts: 6
+candidate:
+  id: BOUNDED_RETRY
+  max_attempts: 2
+  delay_ms: 25
+  retryable_statuses: 500-599
+required_behavior:
+  - preserve recovery after a single HTTP 500
+  - surface persistent HTTP 500
+  - do not retry HTTP 400
+  - correlate provider receipts with client attempt ordinals
+certification: NOT_SUPPORTED_FOR_THIS_SUITE

@@ -1,0 +1,18 @@
+# Synthetic profile. Bundled into the API; plans retain the exact YAML and SHA-256.
+organization:
+  name: demo-org
+  runtime: [ECS_FARGATE]
+  languages: [JAVA]
+  messaging: [SQS_STANDARD]
+  databases: [DYNAMODB, POSTGRESQL]
+  observability: [CLOUDWATCH, OPENTELEMETRY]
+  infrastructure_as_code: [TERRAFORM]
+  constraints:
+    new_managed_service:
+      requires_architecture_review: true
+    payment_side_effects:
+      require_idempotency: true
+    production_changes:
+      require_human_approval: true
+    auto_merge: false
+    auto_deploy: false

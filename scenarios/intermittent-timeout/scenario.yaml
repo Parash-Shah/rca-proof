@@ -1,0 +1,12 @@
+# Documentation for the compiled abstention adapter.
+scenario: intermittent-timeout-v1
+failureSignature: INTERMITTENT_TIMEOUT
+telemetry: incomplete
+unresolved_hypotheses: [DEPENDENCY_LATENCY, NETWORK_DELAY]
+expected:
+  proof: INCONCLUSIVE
+  classification: UNKNOWN
+  action: COLLECT_MORE_EVIDENCE
+  experiments: 0
+  remediation_candidates: 0
+requested_evidence: [correlated client/server spans, dependency timings]

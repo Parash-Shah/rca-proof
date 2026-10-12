@@ -1,0 +1,9 @@
+{"uid":"rcaproof","title":"RCAProof — measured incident outcomes","schemaVersion":40,"version":1,"refresh":"15s","panels":[
+ {"id":1,"type":"stat","title":"Proven incidents (scoped)","gridPos":{"x":0,"y":0,"w":8,"h":5},"datasource":{"type":"prometheus","uid":"rcaproof-prometheus"},"targets":[{"expr":"rcaproof_incidents_proven"}]},
+ {"id":2,"type":"stat","title":"Inconclusive incidents","gridPos":{"x":8,"y":0,"w":8,"h":5},"datasource":{"type":"prometheus","uid":"rcaproof-prometheus"},"targets":[{"expr":"rcaproof_incidents_inconclusive"}]},
+ {"id":3,"type":"stat","title":"Historical certificates issued","gridPos":{"x":16,"y":0,"w":8,"h":5},"datasource":{"type":"prometheus","uid":"rcaproof-prometheus"},"targets":[{"expr":"rcaproof_certificates_issued_total"}]},
+ {"id":4,"type":"timeseries","title":"Experiment attempts","gridPos":{"x":0,"y":5,"w":12,"h":8},"datasource":{"type":"prometheus","uid":"rcaproof-prometheus"},"targets":[{"expr":"rcaproof_experiments_total"}]},
+ {"id":5,"type":"timeseries","title":"Classification distribution","gridPos":{"x":12,"y":5,"w":12,"h":8},"datasource":{"type":"prometheus","uid":"rcaproof-prometheus"},"targets":[{"expr":"rcaproof_classifications","legendFormat":"{{category}}"}]},
+ {"id":6,"type":"stat","title":"Mean RCA duration (seconds, completed jobs)","gridPos":{"x":0,"y":13,"w":12,"h":5},"datasource":{"type":"prometheus","uid":"rcaproof-prometheus"},"targets":[{"expr":"rcaproof_rca_duration_seconds_sum / clamp_min(rcaproof_rca_duration_seconds_count, 1)"}]},
+ {"id":7,"type":"stat","title":"Failed remediation verifications","gridPos":{"x":12,"y":13,"w":12,"h":5},"datasource":{"type":"prometheus","uid":"rcaproof-prometheus"},"targets":[{"expr":"rcaproof_remediations_rejected"}]}
+]}

@@ -1,0 +1,24 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"><modelVersion>4.0.0</modelVersion>
+<parent><groupId>dev.rcaproof</groupId><artifactId>rca-proof</artifactId><version>0.1.0-SNAPSHOT</version></parent>
+<artifactId>rcaproof-api</artifactId>
+<dependencies>
+<dependency><groupId>dev.rcaproof</groupId><artifactId>rcaproof-core</artifactId><version>${project.version}</version></dependency>
+<dependency><groupId>dev.rcaproof</groupId><artifactId>payment-worker</artifactId><version>${project.version}</version></dependency>
+<dependency><groupId>dev.rcaproof</groupId><artifactId>external-payment-mock</artifactId><version>${project.version}</version></dependency>
+<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-jdbc</artifactId></dependency>
+<dependency><groupId>org.flywaydb</groupId><artifactId>flyway-core</artifactId></dependency>
+<dependency><groupId>org.flywaydb</groupId><artifactId>flyway-database-postgresql</artifactId></dependency>
+<dependency><groupId>org.postgresql</groupId><artifactId>postgresql</artifactId><scope>runtime</scope></dependency>
+<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-test</artifactId><scope>test</scope></dependency>
+<dependency><groupId>org.testcontainers</groupId><artifactId>postgresql</artifactId><scope>test</scope></dependency>
+<dependency><groupId>org.testcontainers</groupId><artifactId>localstack</artifactId><scope>test</scope></dependency>
+<dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+</dependencies>
+<build><resources>
+<resource><directory>src/main/resources</directory></resource>
+<resource><directory>${project.basedir}/../build-evidence</directory><targetPath>build-evidence</targetPath><includes><include>source.json</include><include>candidate.patch</include></includes></resource>
+<resource><directory>${project.basedir}/../organization</directory><targetPath>organization</targetPath><includes><include>demo-org.yaml</include></includes></resource>
+</resources><plugins>
+<plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><configuration><classifier>exec</classifier></configuration></plugin>
+<plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId></plugin>
+</plugins></build></project>

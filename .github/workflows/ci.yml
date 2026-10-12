@@ -1,0 +1,56 @@
+name: verify
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21.0.9'
+          cache: maven
+      - name: Bind committed source and reviewable patch
+        env:
+          BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 scripts/prepare-certification.py --base "$BASE_COMMIT"
+      - name: Verify certification evidence tools
+        run: python3 -B scripts/test_certification_tools.py
+      - name: Unit tests, LocalStack counterfactual experiments, and packaging
+        run: mvn -B -ntp clean verify
+      - name: Validate lab configuration
+        run: docker compose config --quiet
+      - name: Build demo containers
+        run: docker compose build
+      - name: Validate the three outcomes and provisioned dashboards
+        run: |
+          chmod +x infra/localstack/init.sh
+          docker compose --profile observability up -d rcaproof-api prometheus grafana
+          docker compose --profile observability run --rm release-check
+      - name: Stop release smoke services
+        if: always()
+        run: docker compose --profile observability down
+      - name: Upload experimental evidence and test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-evidence
+          path: |
+            **/target/surefire-reports/
+            **/target/failsafe-reports/
+            **/target/counterfactual-proof.json
+            **/target/certification-subject*.json
+            **/target/scenario-evaluation.*
+            rcaproof-api/target/rcaproof-api-*-exec.jar
+            build-evidence/source.json
+            build-evidence/candidate.patch
+            artifacts/ci-attestation.json
+            artifacts/release-check-*.json

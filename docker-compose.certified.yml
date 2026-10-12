@@ -1,0 +1,8 @@
+# Mount the identical downloaded CI artifact; a fresh Maven rebuild has a different identity.
+services:
+  rcaproof-api:
+    volumes:
+      - type: bind
+        source: ${RCAPROOF_CERTIFIED_JAR:?Set RCAPROOF_CERTIFIED_JAR to the absolute downloaded executable JAR path}
+        target: /app/app.jar
+        read_only: true

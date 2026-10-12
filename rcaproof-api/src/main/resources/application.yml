@@ -1,0 +1,38 @@
+spring:
+  mvc:
+    problemdetails:
+      enabled: true
+  application:
+    name: rcaproof-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5433/rcaproof?socketTimeout=10}
+    username: ${DATABASE_USER:rcaproof}
+    password: ${DATABASE_PASSWORD:local-demo-only}
+    hikari:
+      connection-timeout: 5000
+      maximum-pool-size: 6
+  task:
+    scheduling:
+      pool:
+        size: 4
+server:
+  port: 8080
+  shutdown: graceful
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+rcaproof:
+  github:
+    token: ${RCAPROOF_GITHUB_TOKEN:}
+    repository: ${RCAPROOF_GITHUB_REPOSITORY:Parash-Shah/rca-proof}
+    base-branch: ${RCAPROOF_GITHUB_BASE_BRANCH:main}
+    review-key: ${RCAPROOF_REVIEW_KEY:}
+  certification:
+    public-key: ${RCAPROOF_CI_PUBLIC_KEY:}
+    repository: ${RCAPROOF_CI_REPOSITORY:Parash-Shah/rca-proof}
+  worker-enabled: true
+  poll-ms: 1000
+  sandbox-endpoint: ${LAB_AWS_ENDPOINT:http://localhost:4566}
+  http-sandbox-endpoint: ${LAB_HTTP_ENDPOINT:http://localhost:8085}

@@ -1,0 +1,9 @@
+.git
+.idea
+.tools
+**/target
+artifacts
+src
+*.log
+.env
+**/__pycache__

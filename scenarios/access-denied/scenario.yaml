@@ -1,0 +1,14 @@
+# Documentation for the compiled access-denied-v1 adapter, not a generic executable DSL.
+scenario: access-denied-v1
+failureSignature: ACCESS_DENIED
+scope: synthetic local resource policy; not production IAM verification
+factors: [MISSING_PERMISSION, ALTERNATE_DEPLOYMENT]
+policyVersion: demo-read-policy-v1
+expected:
+  minimalCausalSet: [MISSING_PERMISSION]
+  classification: EXPECTED_BEHAVIOR
+  action: NO_CODE_CHANGE
+controls:
+  permission_present: 200
+  permission_missing: 403
+  alternate_deployment: same supported policy implementation

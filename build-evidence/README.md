@@ -1,0 +1,2 @@
+This directory is intentionally empty of claims in a development checkout.
+`python scripts/prepare-certification.py --base <commit>` creates a committed-source manifest and exact binary Git patch here before a clean build. It rejects dirty source trees. Generated evidence is ignored by Git and packaged into the executable API archive. Missing evidence blocks certification, not local investigation or verification.
