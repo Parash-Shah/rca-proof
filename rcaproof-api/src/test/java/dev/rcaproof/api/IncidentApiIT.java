@@ -339,9 +339,7 @@ class IncidentApiIT {
         assertEquals("NOT_CERTIFIED",rejected.getBody().status());
         assertFalse(rejected.getBody().blockers().isEmpty());
         assertEquals(HttpStatus.BAD_REQUEST,http.postForEntity("/v1/verifications/"+id+"/certificate",new CertificationGate.Envelope("",""),String.class).getStatusCode());
-        var subject=(com.fasterxml.jackson.databind.node.ObjectNode)json.valueToTree(result.report());
-        subject.put("candidateId",result.candidateId()).put("failureSignature","DUPLICATE_PAYMENT");
-        java.nio.file.Files.writeString(java.nio.file.Path.of("target/certification-subject.json"),json.writeValueAsString(subject));
+        exportCertificationSubject(result,"DUPLICATE_PAYMENT","certification-subject.json");
         try (var restarted=restart(false)) {
             assertEquals(result,restarted.getBean(VerificationStore.class).view(id));
         }
@@ -454,9 +452,7 @@ class IncidentApiIT {
         var result=verifications.view(id);
         assertEquals("VERIFIED_IN_SANDBOX",result.status(),String.valueOf(result.report())); assertEquals(16,result.checks().size());
         assertEquals("http-retry-verification-v2",result.report().suiteVersion());
-        var subject=(com.fasterxml.jackson.databind.node.ObjectNode)json.valueToTree(result.report());
-        subject.put("candidateId",result.candidateId()).put("failureSignature","RETRY_STORM");
-        java.nio.file.Files.writeString(java.nio.file.Path.of("target/certification-subject-http-retry.json"),json.writeValueAsString(subject));
+        exportCertificationSubject(result,"RETRY_STORM","certification-subject-http-retry.json");
         assertEquals("NOT_CERTIFIED",certificates.certificate(id).status());
         assertEquals(HttpStatus.CONFLICT,http.postForEntity("/v1/verifications/"+id+"/review",null,String.class).getStatusCode());
         assertThrows(org.springframework.web.server.ResponseStatusException.class,()->verifications.enqueue(incident.id(),"DISABLE_RETRIES"));
@@ -483,5 +479,23 @@ class IncidentApiIT {
         assertEquals(prepared,reviewService.prepare(id));
         var revoked=new CertificationService(mockRuns,mockBuild,new OrganizationProfile(),db,json,CertificationGateTest.publicKey(CertificationGateTest.key()),"Parash-Shah/rca-proof");
         assertEquals("STALE",revoked.certificate(id).status());
+    }
+    private void exportCertificationSubject(VerificationModels.View result,String signature,String filename) throws Exception {
+        // Unbound local builds can exercise the lab. Committed CI builds must export
+        // the real source/archive binding, never a passing suite with broken provenance.
+        try (var manifest=getClass().getResourceAsStream("/build-evidence/source.json")) {
+            if (manifest!=null) {
+                var binding=result.report().binding();
+                assertNotNull(binding);
+                assertNull(binding.problem(),"Committed verification must have valid build provenance");
+                assertEquals(json.readValue(manifest,BuildProvenance.Source.class),binding.source());
+                assertFalse(binding.dependencies().isEmpty());
+                assertEquals(BuildProvenance.sha256(java.nio.file.Files.readAllBytes(
+                        java.nio.file.Path.of("target/rcaproof-api-0.1.0-SNAPSHOT-exec.jar"))),binding.applicationSha256());
+            }
+        }
+        var subject=(com.fasterxml.jackson.databind.node.ObjectNode)json.valueToTree(result.report());
+        subject.put("candidateId",result.candidateId()).put("failureSignature",signature);
+        java.nio.file.Files.writeString(java.nio.file.Path.of("target",filename),json.writeValueAsString(subject));
     }
 }

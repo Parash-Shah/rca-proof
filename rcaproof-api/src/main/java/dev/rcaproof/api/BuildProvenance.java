@@ -27,8 +27,9 @@ public class BuildProvenance {
             if (!hex(source.commit(),40) || !hex(source.baseCommit(),40) || !hex(source.tree(),40)
                     || !hex(source.patchSha256(),64) || !sha256(patch.readAllBytes()).equals(source.patchSha256()))
                 throw new IllegalStateException("Invalid source identity or patch digest");
-            Path jar=new ApplicationHome(ApiApplication.class).getSource().toPath();
-            if (!Files.isRegularFile(jar)) jar=Path.of("target/rcaproof-api-0.1.0-SNAPSHOT-exec.jar");
+            var applicationSource=new ApplicationHome(ApiApplication.class).getSource();
+            Path jar=applicationSource==null ? null : applicationSource.toPath();
+            if (jar==null || !Files.isRegularFile(jar)) jar=Path.of("target/rcaproof-api-0.1.0-SNAPSHOT-exec.jar");
             var dependencies=new TreeMap<String,String>();
             try (var archive=new JarFile(jar.toFile())) {
                 for (var entry:Collections.list(archive.entries())) if (entry.getName().startsWith("BOOT-INF/lib/") && entry.getName().endsWith(".jar"))
