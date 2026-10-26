@@ -14,7 +14,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = {"dev.rcaproof.causal.CounterfactualEngineTest", "dev.rcaproof.remediation.RemediationPlannerTest",
-            "dev.rcaproof.demo.order.OrderApplicationTest", "dev.rcaproof.demo.worker.PaymentCounterfactualIT",
+            "dev.rcaproof.demo.order.OrderApplicationTest", "dev.rcaproof.demo.order.TelemetryClientTest", "dev.rcaproof.demo.worker.PaymentCounterfactualIT",
             "dev.rcaproof.demo.provider.ProviderApplicationTest", "dev.rcaproof.api.IncidentApiIT",
             "dev.rcaproof.api.CertificationGateTest", "dev.rcaproof.experiment.ScenarioEvaluationTest", "dev.rcaproof.api.GitHubReviewClientTest", "dev.rcaproof.api.HttpRetrySandboxIT", "dev.rcaproof.api.HttpTransportSandboxIT"}
 REQUIRED_CHECKS = {"BASELINE_0", "BASELINE_1", "REPLAY_0", "REPLAY_1", "COUNTERFACTUAL_0", "COUNTERFACTUAL_1",

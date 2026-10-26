@@ -70,7 +70,7 @@ services:
       args:
         SERVICE: external-payment-mock
     ports:
-      - "127.0.0.1:8082:8082"
+      - "127.0.0.1:${RCAPROOF_PROVIDER_PORT:-8082}:8082"
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8082"]
       interval: 5s
@@ -82,7 +82,7 @@ services:
       args:
         SERVICE: order-service
     ports:
-      - "127.0.0.1:8081:8081"
+      - "127.0.0.1:${RCAPROOF_ORDER_PORT:-8081}:8081"
     environment:
       LAB_AWS_ENDPOINT: http://localstack:4566
     depends_on:

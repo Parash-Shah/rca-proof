@@ -27,7 +27,7 @@ import static dev.rcaproof.api.IncidentModels.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Testcontainers
-@SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT,properties="rcaproof.worker-enabled=false")
+@SpringBootTest(webEnvironment=SpringBootTest.WebEnvironment.RANDOM_PORT,properties={"rcaproof.worker-enabled=false","rcaproof.telemetry-enabled=true"})
 @Timeout(value=4,unit=TimeUnit.MINUTES)
 class IncidentApiIT {
     @Container static final PostgreSQLContainer<?> postgres=new PostgreSQLContainer<>("postgres:16-alpine");
@@ -52,6 +52,7 @@ class IncidentApiIT {
     @Autowired com.fasterxml.jackson.databind.ObjectMapper json;
     @Autowired DuplicatePaymentSandbox paymentSandbox;
     @Autowired HttpRetrySandbox retrySandbox;
+    @Autowired TelemetryStore telemetry;
     @BeforeEach void clean() { db.execute("TRUNCATE incidents CASCADE"); }
     Incident create() {
         var response=http.postForEntity("/v1/incidents",new CreateIncident("Synthetic duplicate payment",Instant.parse("2026-01-01T00:00:00Z"),
@@ -69,6 +70,74 @@ class IncidentApiIT {
         return List.of(event(incident,0,EventType.ORDER_CREATED,null),event(incident,1,EventType.MESSAGE_RECEIVED,null),
                 event(incident,2,EventType.PAYMENT_SUCCEEDED,"charge-1"),event(incident,3,EventType.WORKER_CRASHED,null),
                 event(incident,4,EventType.MESSAGE_RECEIVED,null),event(incident,5,EventType.PAYMENT_SUCCEEDED,"charge-2"));
+    }
+    @Test void telemetryDeduplicatesConcurrentDeliveryQueuesOnceAndFreezesEvidence() throws Exception {
+        var source=create();
+        var evidence=completeEvidence(source);
+        String key="payment:"+source.order().orderId();
+        var first=new TelemetryStore.Submission(source.order(),evidence.getFirst());
+        try (var pool=Executors.newFixedThreadPool(4)) {
+            var tasks=new ArrayList<Callable<TelemetryStore.View>>();
+            for (int i=0;i<8;i++) tasks.add(()->telemetry.accept(first));
+            for (var result:pool.invokeAll(tasks)) assertEquals(1,result.get().eventCount());
+        }
+        // Arrival order differs from event order; correlation must still work.
+        for (int i=evidence.size()-1;i>0;i--) telemetry.accept(new TelemetryStore.Submission(source.order(),evidence.get(i)));
+        UUID id;
+        try (var pool=Executors.newFixedThreadPool(4)) {
+            var tasks=new ArrayList<Callable<TelemetryStore.View>>();
+            for (int i=0;i<8;i++) tasks.add(()->telemetry.materialize(key));
+            var ids=new HashSet<UUID>();
+            for (var result:pool.invokeAll(tasks)) ids.add(result.get().incidentId());
+            assertEquals(1,ids.size()); id=ids.iterator().next(); assertNotNull(id);
+        }
+        assertEquals("QUEUED",store.investigation(id).status());
+        assertEquals(6,store.timeline(id).events().size());
+        telemetry.accept(new TelemetryStore.Submission(source.order(),event(source,8,EventType.MESSAGE_ACKNOWLEDGED,null)));
+        assertEquals(7,telemetry.view(key).eventCount());
+        assertEquals(6,store.timeline(id).events().size());
+        assertEquals(id,telemetry.materialize(key).incidentId());
+        var original=evidence.getFirst();
+        var altered=new Evidence(original.eventId(),original.timestamp(),"different",original.eventType(),original.orderId(),null,null,null,null,null,null,"SUCCESS",Map.of());
+        assertEquals(HttpStatus.CONFLICT,http.postForEntity("/v1/telemetry/events",new TelemetryStore.Submission(source.order(),altered),Map.class).getStatusCode());
+        assertEquals(7,telemetry.view(key).eventCount());
+    }
+    @Test void repeatedChargeIsHealthyAndMissingCrashEvidenceAbstainsAfterGracePeriod() {
+        var source=create(); String key="payment:"+source.order().orderId();
+        for (var e:List.of(event(source,0,EventType.ORDER_CREATED,null),event(source,1,EventType.PAYMENT_SUCCEEDED,"same"),event(source,2,EventType.PAYMENT_SUCCEEDED,"same")))
+            assertEquals(HttpStatus.ACCEPTED,http.postForEntity("/v1/telemetry/events",new TelemetryStore.Submission(source.order(),e),TelemetryStore.View.class).getStatusCode());
+        assertEquals("COLLECTING",telemetry.materialize(key).status());
+        telemetry.accept(new TelemetryStore.Submission(source.order(),event(source,3,EventType.PAYMENT_SUCCEEDED,"second")));
+        assertNull(telemetry.materialize(key).incidentId());
+        db.update("UPDATE telemetry_streams SET detected_at=clock_timestamp()-interval '31 seconds' WHERE stream_key=?",key);
+        UUID id=telemetry.materialize(key).incidentId(); assertNotNull(id);
+        assertNotNull(EvidenceAssessment.missing(store.timeline(id).events()));
+        assertEquals("QUEUED",store.investigation(id).status());
+    }
+    @Test void measuredHttpRequestsAutomaticallyDetectOnlyAmplification() {
+        for (var request:List.of(new TelemetryController.Request("HEALTHY",6),new TelemetryController.Request("HTTP_500",2),
+                new TelemetryController.Request("TRANSIENT_500",6),new TelemetryController.Request("HTTP_400",6))) {
+            var response=http.postForEntity("/v1/labs/http-requests",request,TelemetryStore.View.class);
+            assertEquals(HttpStatus.CREATED,response.getStatusCode());
+            assertEquals("COLLECTING",response.getBody().status());
+            assertNull(telemetry.materialize(response.getBody().streamKey()).incidentId());
+        }
+        var response=http.postForEntity("/v1/labs/http-requests",new TelemetryController.Request("HTTP_500",6),TelemetryStore.View.class);
+        assertEquals(HttpStatus.CREATED,response.getStatusCode());
+        assertEquals("DETECTED",response.getBody().status());
+        UUID id=telemetry.materialize(response.getBody().streamKey()).incidentId();
+        assertNull(ScenarioDefinition.retryEvidenceMissing(store.timeline(id).events()));
+        assertEquals("QUEUED",store.investigation(id).status());
+        assertEquals(HttpStatus.BAD_REQUEST,http.postForEntity("/v1/labs/http-requests",new TelemetryController.Request("HTTP_500",7),Map.class).getStatusCode());
+    }
+    @Test void telemetryRejectsMismatchedOrderAndIsDisabledByDefault() {
+        var source=create();
+        var wrong=new Order("other","customer",new BigDecimal("129.95"));
+        assertEquals(HttpStatus.BAD_REQUEST,http.postForEntity("/v1/telemetry/events",new TelemetryStore.Submission(wrong,event(source,0,EventType.ORDER_CREATED,null)),Map.class).getStatusCode());
+        try (var restarted=restart(false)) {
+            var client=new TestRestTemplate();
+            assertEquals(HttpStatus.NOT_FOUND,client.getForEntity("http://localhost:"+restarted.getWebServer().getPort()+"/v1/telemetry/payment/other",Map.class).getStatusCode());
+        }
     }
     void upload(Incident incident,List<Evidence> events) {
         assertEquals(HttpStatus.OK,http.postForEntity("/v1/incidents/"+incident.id()+"/evidence",new EvidenceBatch(events),Map.class).getStatusCode());

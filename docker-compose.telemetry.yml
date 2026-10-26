@@ -1,0 +1,12 @@
+services:
+  rcaproof-api:
+    environment:
+      RCAPROOF_TELEMETRY_ENABLED: "true"
+      RCAPROOF_WORKER_ENABLED: "true"
+  order-service:
+    environment:
+      LAB_TELEMETRY_URL: http://rcaproof-api:8080/v1/telemetry/events
+  payment-worker:
+    entrypoint: ["java", "-Dloader.main=dev.rcaproof.demo.worker.WorkerSupervisor", "-cp", "/app/app.jar", "org.springframework.boot.loader.launch.PropertiesLauncher"]
+    environment:
+      LAB_TELEMETRY_URL: http://rcaproof-api:8080/v1/telemetry/events

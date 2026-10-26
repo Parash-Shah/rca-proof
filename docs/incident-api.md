@@ -2,6 +2,8 @@
 
 The API persists incidents, evidence, investigation jobs, trial checkpoints, lifecycle history and proofs in PostgreSQL using Flyway. It supports the synthetic duplicate-payment lab, a bounded access-policy model, and timeout abstention. See [classification and planning](classification-and-planning.md) for the additional scenarios and decision APIs. Automatic CloudWatch/OTel collectors and arbitrary production-code replay are future work.
 
+For direct collection from the local payment services and measured HTTP requests, enable the [automatic telemetry inbox](automatic-telemetry.md). It creates and queues supported incidents without manually submitting the incident evidence below.
+
 ## Run
 
 ```powershell

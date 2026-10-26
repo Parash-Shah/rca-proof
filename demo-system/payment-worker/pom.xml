@@ -9,6 +9,6 @@
 <dependency><groupId>org.testcontainers</groupId><artifactId>localstack</artifactId><scope>test</scope></dependency>
 <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
 </dependencies>
-<build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><configuration><classifier>exec</classifier></configuration></plugin>
+<build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><configuration><classifier>exec</classifier><mainClass>dev.rcaproof.demo.worker.WorkerApplication</mainClass></configuration></plugin>
 <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-failsafe-plugin</artifactId></plugin>
 </plugins></build></project>

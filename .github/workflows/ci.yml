@@ -8,7 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,6 +38,14 @@ jobs:
       - name: Stop release smoke services
         if: always()
         run: docker compose --profile observability down
+      - name: Validate automatic incident collection and healthy controls
+        shell: pwsh
+        run: |
+          ./scripts/demo-telemetry.ps1
+          ./scripts/demo-telemetry.ps1 -Fixed -SkipBuild
+      - name: Stop telemetry smoke services
+        if: always()
+        run: docker compose -p rcaproof-telemetry -f docker-compose.yml -f docker-compose.telemetry.yml down
       - name: Upload experimental evidence and test results
         if: always()
         uses: actions/upload-artifact@v4
@@ -54,3 +62,4 @@ jobs:
             build-evidence/candidate.patch
             artifacts/ci-attestation.json
             artifacts/release-check-*.json
+            artifacts/telemetry/demo-*.json

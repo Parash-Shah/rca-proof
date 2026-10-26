@@ -1,6 +1,7 @@
 package dev.rcaproof.demo.worker;
 
 import dev.rcaproof.demo.contract.LabAwsConfiguration;
+import dev.rcaproof.demo.contract.TelemetryClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.boot.*;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -23,7 +24,9 @@ public class WorkerApplication {
             @Value("${lab.payments-table:payments}") String table,
             @Value("${lab.provider-url:http://localhost:8082}") String providerUrl,
             @Value("${lab.provider-idempotency:false}") boolean idempotency,
-            @Value("${lab.crash-after-charge:false}") boolean crash) {
+            @Value("${lab.crash-after-charge:false}") boolean crash,
+            @Value("${lab.telemetry-url:}") String telemetryUrl) {
+        var telemetry=new TelemetryClient(telemetryUrl,json);
         URI provider = URI.create(providerUrl);
         if (!"http".equals(provider.getScheme()) || !java.util.Set.of("localhost", "127.0.0.1", "external-payment-mock").contains(provider.getHost()))
             throw new IllegalArgumentException("Provider must be a local failure-lab mock");
@@ -37,6 +40,9 @@ public class WorkerApplication {
                     LoggerFactory.getLogger(WorkerApplication.class).error("event=INJECTED_PROCESS_KILL point=AFTER_PAYMENT_BEFORE_ACK");
                     Runtime.getRuntime().halt(86);
                 }
+            },false,(order,type,messageId,metadata)-> {
+                telemetry.emit(order,"payment-worker",type,messageId,metadata);
+                if (crash && "PAYMENT_SUCCEEDED".equals(type)) WorkerSupervisor.record(json,order,messageId);
             });
             while (!Thread.currentThread().isInterrupted()) {
                 var messages = sqs.receiveMessage(r -> r.queueUrl(url).waitTimeSeconds(10).maxNumberOfMessages(1)).messages();

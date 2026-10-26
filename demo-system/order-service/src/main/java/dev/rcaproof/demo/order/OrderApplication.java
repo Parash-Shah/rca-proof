@@ -24,10 +24,19 @@ public class OrderApplication {
     private final ObjectMapper json;
     private final String queue;
     private final String table;
+    private TelemetryClient telemetry;
     public OrderApplication(SqsClient sqs, DynamoDbClient db, ObjectMapper json,
                             @Value("${lab.queue-name:payment-orders}") String queue,
                             @Value("${lab.orders-table:orders}") String table) {
         this.sqs = sqs; this.db = db; this.json = json; this.queue = queue; this.table = table;
+    }
+    @org.springframework.beans.factory.annotation.Autowired
+    public OrderApplication(SqsClient sqs, DynamoDbClient db, ObjectMapper json,
+                            @Value("${lab.queue-name:payment-orders}") String queue,
+                            @Value("${lab.orders-table:orders}") String table,
+                            @Value("${lab.telemetry-url:}") String telemetryUrl) {
+        this(sqs,db,json,queue,table);
+        telemetry=new TelemetryClient(telemetryUrl,json);
     }
     public static void main(String[] args) { SpringApplication.run(OrderApplication.class, args); }
 
@@ -41,7 +50,8 @@ public class OrderApplication {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Order ID already exists");
         }
         String url = sqs.getQueueUrl(r -> r.queueName(queue)).queueUrl();
-        sqs.sendMessage(r -> r.queueUrl(url).messageBody(body));
+        var sent=sqs.sendMessage(r -> r.queueUrl(url).messageBody(body));
+        if (telemetry!=null) telemetry.emit(order,"order-service","ORDER_CREATED",sent.messageId(),Map.of());
         return order;
     }
     @GetMapping("/orders/{id}")

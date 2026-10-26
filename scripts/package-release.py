@@ -8,7 +8,7 @@ from uuid import uuid4
 
 ROOT = Path(__file__).resolve().parents[1]
 DIRECTORIES = {".github", "rcaproof-api", "rcaproof-core", "demo-system", "scenarios", "organization", "infra", "dashboards", "docs", "scripts", "build-evidence"}
-FILES = {"pom.xml", "Dockerfile", "docker-compose.yml", "docker-compose.certified.yml", "README.md", "LICENSE", ".dockerignore", ".gitattributes", ".gitignore"}
+FILES = {"pom.xml", "Dockerfile", "docker-compose.yml", "docker-compose.certified.yml", "docker-compose.telemetry.yml", "README.md", "LICENSE", ".dockerignore", ".gitattributes", ".gitignore"}
 EXCLUDED = {"target", "__pycache__", ".git", ".idea", "node_modules", ".terraform"}
 
 

@@ -1,3 +1,22 @@
+# Automatic collection milestone — 2026-10-15
+
+Implemented opt-in service telemetry for the local payment lab and measured HTTP requests. The durable inbox deduplicates event delivery, correlates order/message or request IDs, detects supported failures and atomically creates and queues investigations. A process supervisor reports the injected payment-worker crash only after observing exit code 86. Healthy/reused-charge controls do not trigger incidents. See [the telemetry guide](automatic-telemetry.md).
+
+The new demo uses the independent `rcaproof-telemetry` Compose project and ports 18081–18085, 14566 and 15433. CI now runs its vulnerable and fixed paths and retains reports. Certification signing additionally requires the telemetry sender test suite. New development builds do not inherit prior certification; stale generated source claims were backed up under ignored `artifacts/telemetry/provenance-backup/` and removed before compiling.
+
+Previous certification release work is complete for commit `bcb92ade2d32b857409989d036387c6d72aa54c0`: both approved payment and HTTP retry signing runs succeeded, their downloaded archive/signatures were checked, and the exact archive was validated locally. The older notes below describe earlier milestones and their remaining work at those dates. The automatic collection changes require a new reviewed commit and CI certification.
+
+Local regression results: **106 Java tests passed**, zero failures/errors/skips in the latest reports, and both Python certification-tool tests passed. The first full reactor run was interrupted by an approximately one-hour environment clock jump during an existing verification test; all 26 API integration tests passed on rerun. The initial reports are preserved under `artifacts/telemetry/interrupted-test-run/`; the final suite inventory is `artifacts/telemetry/java-tests.json`. PowerShell, workflow YAML and merged telemetry Compose syntax checks passed. CI configuration is updated; remote CI has not run for these uncommitted changes.
+
+Live validation completed October 16 using the newly compiled archives, mounted in an isolated non-root runtime matching the Dockerfile user. The original overnight-interrupted demo was discarded. A subsequent transient status-read timeout prompted bounded polling retries; a targeted PowerShell check verified timeout recovery and rejection of inconclusive proofs.
+
+- Vulnerable payment: actual worker exit **86**, **two distinct charges**, seven collected events, automatic incident `aa8f1c01-030c-421d-92b9-15242e9343a3`, and **PROVEN** after 16 trials. The minimal cause was message redelivery plus missing idempotency.
+- HTTP amplification: six measured HTTP 500 attempts, automatic incident `9ec3b9cb-86ad-4c9b-8841-08ead48abd7c`, and **PROVEN** after 16 trials. The minimal cause was persistent dependency HTTP 500 responses plus excessive retries.
+- Fixed-payment control: actual crash and replay, **one charge**, seven collected events and **no incident**. Healthy HTTP requests likewise created no incident. A further HTTP amplification run also reached PROVEN.
+- Saved reports: `artifacts/telemetry/demo-telemetry-4e65886219d94157816f1c3dcfc60f50.json` and `artifacts/telemetry/demo-telemetry-4ecd7b3347f3460d8f630f952d2b44f9.json`. Full proofs and timelines are `artifacts/telemetry/proof-*.json` and `timeline-*.json`.
+
+These are scoped local-lab results. No manual incident creation, incident evidence submission or investigation request was used by the live demo. The earlier certified runtime and artifacts remain separate from this development build.
+
 # Development status — 2026-10-12
 
 ## Local demo completion checks — October 12

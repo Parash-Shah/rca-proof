@@ -23,6 +23,8 @@ public final class PaymentProcessor {
     private final boolean providerIdempotency;
     private final Runnable afterCharge;
     private final boolean conditionalLedger;
+    @FunctionalInterface public interface Observer { void event(Order order,String type,String messageId,Map<String,String> metadata); }
+    private final Observer observer;
     public PaymentProcessor(SqsClient sqs, DynamoDbClient db, RestClient provider, ObjectMapper json,
                             String queueUrl, String paymentsTable, boolean providerIdempotency, Runnable afterCharge) {
         this(sqs,db,provider,json,queueUrl,paymentsTable,providerIdempotency,afterCharge,false);
@@ -30,15 +32,21 @@ public final class PaymentProcessor {
     /** Candidate mode is selected only by the verification sandbox; the vulnerable lab default is preserved. */
     public PaymentProcessor(SqsClient sqs, DynamoDbClient db, RestClient provider, ObjectMapper json,
                             String queueUrl, String paymentsTable, boolean providerIdempotency, Runnable afterCharge, boolean conditionalLedger) {
+        this(sqs,db,provider,json,queueUrl,paymentsTable,providerIdempotency,afterCharge,conditionalLedger,(o,t,m,d)->{});
+    }
+    public PaymentProcessor(SqsClient sqs, DynamoDbClient db, RestClient provider, ObjectMapper json,
+                            String queueUrl, String paymentsTable, boolean providerIdempotency, Runnable afterCharge, boolean conditionalLedger, Observer observer) {
         this.sqs = sqs; this.db = db; this.provider = provider; this.json = json;
         this.queueUrl = queueUrl; this.paymentsTable = paymentsTable;
         this.providerIdempotency = providerIdempotency; this.afterCharge = afterCharge;
         this.conditionalLedger = conditionalLedger;
+        this.observer=observer;
         if (conditionalLedger && !providerIdempotency) throw new IllegalArgumentException("Ledger candidate requires provider idempotency");
     }
     public void process(Message message) throws Exception {
         Order order = json.readValue(message.body(), Order.class);
         log.info("event=WORKER_RECEIVED orderId={} messageId={}", order.orderId(), message.messageId());
+        observer.event(order,"MESSAGE_RECEIVED",message.messageId(),Map.of());
         if (conditionalLedger) {
             var saved=db.getItem(r->r.tableName(paymentsTable).key(Map.of("orderId",AttributeValue.builder().s(order.orderId()).build())).consistentRead(true)).item();
             if (!saved.isEmpty()) {
@@ -47,6 +55,7 @@ public final class PaymentProcessor {
                         || order.amount().compareTo(new java.math.BigDecimal(saved.get("amount").n()))!=0)
                     throw new IllegalStateException("Conflicting or legacy ledger record requires reconciliation before replay");
                 sqs.deleteMessage(r->r.queueUrl(queueUrl).receiptHandle(message.receiptHandle()));
+                observer.event(order,"MESSAGE_ACKNOWLEDGED",message.messageId(),Map.of());
                 return;
             }
         }
@@ -65,6 +74,7 @@ public final class PaymentProcessor {
         }
         if (charge == null || charge.chargeId() == null) throw new IllegalStateException("Missing provider charge result");
         log.info("event=PROVIDER_CHARGED orderId={} messageId={} chargeId={}", order.orderId(), message.messageId(), charge.chargeId());
+        observer.event(order,"PAYMENT_SUCCEEDED",message.messageId(),Map.of("chargeId",charge.chargeId()));
         afterCharge.run(); // Fault boundary: external effect committed, no local record, no SQS ACK.
         var item=Map.of(
                 "orderId", AttributeValue.builder().s(order.orderId()).build(),
@@ -79,6 +89,7 @@ public final class PaymentProcessor {
         });
         sqs.deleteMessage(r -> r.queueUrl(queueUrl).receiptHandle(message.receiptHandle()));
         log.info("event=MESSAGE_ACKNOWLEDGED orderId={} messageId={}", order.orderId(), message.messageId());
+        observer.event(order,"MESSAGE_ACKNOWLEDGED",message.messageId(),Map.of());
     }
     public record Charge(String chargeId, String orderId) {}
     public record Reconciliation(String chargeId,String orderId,String customerId,java.math.BigDecimal amount) {}

@@ -8,6 +8,8 @@ RCAProof's goal is to collect incident evidence, experimentally establish minima
 
 ## Current milestone
 
+Automatic collection is available for the real payment and HTTP retry labs. Run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/demo-telemetry.ps1` to collect service events, detect failures and queue investigations without manually supplying incident evidence. See [automatic telemetry](docs/automatic-telemetry.md) for the isolated demo, fixed-mode control and delivery limits.
+
 For a complete local demo with Prometheus, Grafana and automated checks of all three incident outcomes:
 
 ```powershell
