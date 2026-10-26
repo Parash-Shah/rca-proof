@@ -33,8 +33,10 @@ jobs:
       - name: Validate the three outcomes and provisioned dashboards
         run: |
           chmod +x infra/localstack/init.sh
+          # Keep bind-mounted reports writable by subsequent host-side checks.
+          mkdir -p artifacts/telemetry
           docker compose --profile observability up -d rcaproof-api prometheus grafana
-          docker compose --profile observability run --rm release-check
+          docker compose --profile observability run --rm --user "$(id -u):$(id -g)" release-check
       - name: Stop release smoke services
         if: always()
         run: docker compose --profile observability down
